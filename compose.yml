@@ -27,6 +27,7 @@ services:
       - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
       - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
       - FIREWALL_VPN_INPUT_PORTS=${VPN_FORWARDED_PORT:-8999}
+      - HTTPPROXY=${HTTPPROXY:-on}
       - DOT=off
       - TZ=${TZ:-America/Detroit}
     volumes:
