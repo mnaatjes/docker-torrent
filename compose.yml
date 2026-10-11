@@ -1,31 +1,54 @@
 ---
 # ==============================================================================
-# Docker Compose Stack Specification
-# Adheres to Homelab Systems Lifecycle (HSL) Container Deployment Standards
+# Docker Torrent Stack (Privacy Gateway & BitTorrent Downloader)
+# Adheres to Homelab Systems Lifecycle (HSL) and ADR 0035 Standards
 # ==============================================================================
 
 services:
-  app:
-    image: caddy:2.8-alpine
-    container_name: sample-app
+  gluetun:
+    image: qmcgaw/gluetun:v3.39.1
+    container_name: gluetun
     restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
     ports:
-      - "${SERVICE_HTTP_PORT:-8080}:80"
+      # HTTP Proxy for external indexer search routing (*arr suite)
+      - "${GLUETUN_HTTP_PROXY_PORT:-8888}:8888/tcp"
+      # Transmission Web UI forward
+      - "${TRANSMISSION_WEB_PORT:-9091}:9091/tcp"
+      # BitTorrent incoming peer port forwarded through VPN
+      - "${VPN_FORWARDED_PORT:-8999}:${VPN_FORWARDED_PORT:-8999}/tcp"
+      - "${VPN_FORWARDED_PORT:-8999}:${VPN_FORWARDED_PORT:-8999}/udp"
     environment:
-      - APP_ENV=${APP_ENV:-dev}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER:-mullvad}
+      - VPN_TYPE=${VPN_TYPE:-wireguard}
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES}
+      - FIREWALL_VPN_INPUT_PORTS=${VPN_FORWARDED_PORT:-8999}
+      - DOT=off
+      - TZ=${TZ:-America/Detroit}
     volumes:
-      # Read-only configuration template mount
-      - ./config/sample.conf:/etc/sample.conf:ro
-      # Dynamic persistent runtime state mount (Mirrored under /opt/.../data/)
-      - sample_data:/data
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      - ${DATA_DIR:-./data}/gluetun:/gluetun
 
-volumes:
-  sample_data:
-    driver: local
+  transmission:
+    image: lscr.io/linuxserver/transmission:4.0.6
+    container_name: transmission
+    restart: unless-stopped
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_started
+    environment:
+      - PUID=${PUID:-999}
+      - PGID=${PGID:-110}
+      - TZ=${TZ:-America/Detroit}
+      - USER=${TRANSMISSION_USER:-gemini}
+      - PASS=${TRANSMISSION_PASS:-rtt234egs}
+      - TR_DOWNLOAD_DIR=/media/downloads/complete
+      - TR_INCOMPLETE_DIR=/media/downloads/incomplete
+      - UMASK=${UMASK:-002}
+    volumes:
+      - ${DATA_DIR:-./data}/transmission:/config
+      - ${MEDIA_DIR:-/mnt/nas/media}:/media
