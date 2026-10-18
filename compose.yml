@@ -53,3 +53,4 @@ services:
     volumes:
       - ${DATA_DIR:-./data}/transmission:/config
       - ${MEDIA_DIR:-/mnt/nas/media}:/media
+      - ${MEDIA_DIR:-/mnt/nas/media}/downloads:/downloads
